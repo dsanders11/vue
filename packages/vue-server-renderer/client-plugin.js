@@ -25,6 +25,7 @@ var onEmit = function (compiler, name, hook) {
 };
 
 var hash = require('hash-sum');
+var ssri = require('ssri');
 var uniq = require('lodash.uniq');
 
 var VueSSRClientPlugin = function VueSSRClientPlugin (options) {
@@ -53,12 +54,24 @@ VueSSRClientPlugin.prototype.apply = function apply (compiler) {
       .filter(function (file) { return isJS(file) || isCSS(file); })
       .filter(function (file) { return initialFiles.indexOf(file) < 0; });
 
+    var integrityHashes = allFiles.reduce(function (hashes, filename) {
+      var asset = compilation.assets[filename];
+      var src = asset.source();
+      var integrity = ssri.fromData(src, {
+        algorithms: ['sha384']
+      });
+
+      hashes[filename] = integrity.toString();
+      return hashes
+    }, {});
+
     var manifest = {
       publicPath: stats.publicPath,
       all: allFiles,
       initial: initialFiles,
       async: asyncFiles,
-      modules: { /* [identifier: string]: Array<index: number> */ }
+      modules: { /* [identifier: string]: Array<index: number> */ },
+      integrity: integrityHashes
     };
 
     var assetModules = stats.modules.filter(function (m) { return m.assets.length; });

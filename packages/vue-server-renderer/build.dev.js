@@ -8872,9 +8872,16 @@ var serialize = require('serialize-javascript');
 var TemplateRenderer = function TemplateRenderer (options) {
   this.options = options;
   this.inject = options.inject !== false;
+  this.integrity = options.integrity === true;
+  this.crossorigin = ['', 'anonymous', 'use-credentials'].includes(options.crossorigin) ? options.crossorigin : false;
+
+  if (options.crossorigin !== undefined && this.crossorigin === false) {
+    throw new Error("crossorigin option must be one of '', 'anonymous', or 'use-credentials'")
+  }
+
   // if no template option is provided, the renderer is created
   // as a utility object for rendering assets like preload links and scripts.
-    
+
   var template = options.template;
   this.parsedTemplate = template
     ? typeof template === 'string'
@@ -8899,6 +8906,8 @@ var TemplateRenderer = function TemplateRenderer (options) {
     this.prefetchFiles = (clientManifest.async || []).map(normalizeFile);
     // initial async chunk mapping
     this.mapFiles = createMapper(clientManifest);
+  } else if (this.integrity) {
+    throw new Error('integrity option only works if clientManifest supplied')
   }
 };
 
@@ -8961,9 +8970,10 @@ TemplateRenderer.prototype.renderStyles = function renderStyles (context) {
       ? cssFiles.map(function (ref) {
           var file = ref.file;
 
-          return ("<link rel=\"stylesheet\" href=\"" + (this$1.publicPath) + file + "\">");
-    }).join('')
-      : '') +
+        var crossoriginAttr = this$1.crossorigin ? (" crossorigin=\"" + (this$1.crossorigin) + "\"") : '';
+        var integrityAttr = this$1.integrity ? (" integrity=\"" + (this$1.clientManifest.integrity[file]) + "\"") : '';
+        return ("<link" + crossoriginAttr + integrityAttr + " rel=\"stylesheet\" href=\"" + (this$1.publicPath) + file + "\">")
+      }).join('') : '') +
     // context.styles is a getter exposed by vue-style-loader which contains
     // the inline component styles collected during SSR
     (context.styles || '')
@@ -9004,8 +9014,13 @@ TemplateRenderer.prototype.renderPreloadLinks = function renderPreloadLinks (con
       if (shouldPreload && !shouldPreload(fileWithoutQuery, asType)) {
         return ''
       }
+      var crossorigin = this$1.crossorigin;
       if (asType === 'font') {
-        extra = " type=\"font/" + extension + "\" crossorigin";
+        extra = " type=\"font/" + extension + "\"";
+        crossorigin = crossorigin || '';
+      }
+      if (crossorigin !== false) {
+        extra += " crossorigin=\"" + crossorigin + "\"";
       }
       return ("<link rel=\"preload\" href=\"" + (this$1.publicPath) + file + "\"" + (asType !== '' ? (" as=\"" + asType + "\"") : '') + extra + ">")
     }).join('')
@@ -9034,7 +9049,8 @@ TemplateRenderer.prototype.renderPrefetchLinks = function renderPrefetchLinks (c
       if (alreadyRendered(file)) {
         return ''
       }
-      return ("<link rel=\"prefetch\" href=\"" + (this$1.publicPath) + file + "\">")
+      var crossoriginAttr = this$1.crossorigin !== false ? (" crossorigin=\"" + (this$1.crossorigin) + "\"") : '';
+      return ("<link rel=\"prefetch\" href=\"" + (this$1.publicPath) + file + "\"" + crossoriginAttr + ">")
     }).join('')
   } else {
     return ''
@@ -9071,7 +9087,9 @@ TemplateRenderer.prototype.renderScripts = function renderScripts (context) {
     return needed.map(function (ref) {
         var file = ref.file;
 
-      return ("<script src=\"" + (this$1.publicPath) + file + "\" defer></script>")
+      var crossoriginAttr = this$1.crossorigin !== false ? (" crossorigin=\"" + (this$1.crossorigin) + "\"") : '';
+      var integrityAttr = this$1.integrity ? (" integrity=\"" + (this$1.clientManifest.integrity[file]) + "\"") : '';
+      return ("<script" + crossoriginAttr + integrityAttr + " src=\"" + (this$1.publicPath) + file + "\" defer></script>")
     }).join('')
   } else {
     return ''
@@ -9141,6 +9159,8 @@ function createRenderer (ref) {
   var shouldPrefetch = ref.shouldPrefetch;
   var clientManifest = ref.clientManifest;
   var serializer = ref.serializer;
+  var integrity = ref.integrity;
+  var crossorigin = ref.crossorigin;
 
   var render = createRenderFunction(modules, directives, isUnaryTag, cache);
   var templateRenderer = new TemplateRenderer({
@@ -9149,7 +9169,9 @@ function createRenderer (ref) {
     shouldPreload: shouldPreload,
     shouldPrefetch: shouldPrefetch,
     clientManifest: clientManifest,
-    serializer: serializer
+    serializer: serializer,
+    integrity: integrity,
+    crossorigin: crossorigin
   });
 
   return {
