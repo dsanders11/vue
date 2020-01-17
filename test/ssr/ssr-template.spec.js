@@ -357,30 +357,39 @@ describe('SSR: template option', () => {
     })
   })
 
-  const expectedHTMLWithManifest = (options = {}) =>
-    `<html><head>` +
+  const expectedHTMLWithManifest = (options = {}) => {
+    const integrity = {
+      '/0.js':'sha384-TNpz5n02IHKURsPT0wjkM0GL7py9jqPKUZrHVxRyzNqpU1JIFbbaXxrfXSFk+Bo+',
+      '/main.js': 'sha384-sxHwiX4x5C7H69FstsNzPGcKcwrCK12oRq4Srn6rdW8Y4/S8CrMirsJ7x3/GCIR9',
+      '/manifest.js': 'sha384-kd7w9iCGllxG0F0YdfO78eZnxg2E6XyS6VLnfldVD92HJZODdxrG8i1m87GmzFIn',
+      '/test.css': 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb'
+    }
+    const crossoriginAttr = options.crossorigin ? ` crossorigin="${options.crossorigin}"` : ''
+
+    return `<html><head>` +
       // used chunks should have preload
-      `<link rel="preload" href="/manifest.js" as="script">` +
-      `<link rel="preload" href="/main.js" as="script">` +
-      `<link rel="preload" href="/0.js" as="script">` +
-      `<link rel="preload" href="/test.css" as="style">` +
+      `<link rel="preload" href="/manifest.js" as="script"${crossoriginAttr}>` +
+      `<link rel="preload" href="/main.js" as="script"${crossoriginAttr}>` +
+      `<link rel="preload" href="/0.js" as="script"${crossoriginAttr}>` +
+      `<link rel="preload" href="/test.css" as="style"${crossoriginAttr}>` +
       // images and fonts are only preloaded when explicitly asked for
-      (options.preloadOtherAssets ? `<link rel="preload" href="/test.png" as="image">` : ``) +
-      (options.preloadOtherAssets ? `<link rel="preload" href="/test.woff2" as="font" type="font/woff2" crossorigin>` : ``) +
+      (options.preloadOtherAssets ? `<link rel="preload" href="/test.png" as="image"${crossoriginAttr}>` : ``) +
+      (options.preloadOtherAssets ? `<link rel="preload" href="/test.woff2" as="font" type="font/woff2" ${options.crossorigin ? crossoriginAttr : 'crossorigin=""'}>` : ``) +
       // unused chunks should have prefetch
-      (options.noPrefetch ? `` : `<link rel="prefetch" href="/1.js">`) +
+      (options.noPrefetch ? `` : `<link rel="prefetch" href="/1.js"${crossoriginAttr}>`) +
       // css assets should be loaded
-      `<link rel="stylesheet" href="/test.css">` +
+      `<link${crossoriginAttr}${options.integrity ? ` integrity="${integrity['/test.css']}"` : ''} rel="stylesheet" href="/test.css">` +
     `</head><body>` +
       `<div data-server-rendered="true"><div>async test.woff2 test.png</div></div>` +
       // state should be inlined before scripts
       `<script>window.${options.stateKey || '__INITIAL_STATE__'}={"a":1}</script>` +
       // manifest chunk should be first
-      `<script src="/manifest.js" defer></script>` +
+      `<script${crossoriginAttr}${options.integrity ? ` integrity="${integrity['/manifest.js']}"` : ''} src="/manifest.js" defer></script>` +
       // async chunks should be before main chunk
-      `<script src="/0.js" defer></script>` +
-      `<script src="/main.js" defer></script>` +
+      `<script${crossoriginAttr}${options.integrity ? ` integrity="${integrity['/0.js']}"` : ''} src="/0.js" defer></script>` +
+      `<script${crossoriginAttr}${options.integrity ? ` integrity="${integrity['/main.js']}"` : ''} src="/main.js" defer></script>` +
     `</body></html>`
+  }
 
   createClientManifestAssertions(true)
   createClientManifestAssertions(false)
@@ -391,6 +400,43 @@ describe('SSR: template option', () => {
         renderer.renderToString({ state: { a: 1 }}, (err, res) => {
           expect(err).toBeNull()
           expect(res).toContain(expectedHTMLWithManifest())
+          done()
+        })
+      })
+    })
+
+    it('bundleRenderer + renderToString + clientManifest + integrity ()', done => {
+      createRendererWithManifest('split.js', { runInNewContext, integrity: true }, renderer => {
+        renderer.renderToString({ state: { a: 1 }}, (err, res) => {
+          expect(err).toBeNull()
+          expect(res).toContain(expectedHTMLWithManifest({
+            integrity: true
+          }))
+          done()
+        })
+      })
+    })
+
+    it('bundleRenderer + renderToString + clientManifest + crossorigin ()', done => {
+      createRendererWithManifest('split.js', { runInNewContext, crossorigin: 'anonymous' }, renderer => {
+        renderer.renderToString({ state: { a: 1 }}, (err, res) => {
+          expect(err).toBeNull()
+          expect(res).toContain(expectedHTMLWithManifest({
+            crossorigin: 'anonymous'
+          }))
+          done()
+        })
+      })
+    })
+
+    it('bundleRenderer + renderToString + clientManifest + integrity + crossorigin ()', done => {
+      createRendererWithManifest('split.js', { runInNewContext, integrity: true, crossorigin: 'use-credentials' }, renderer => {
+        renderer.renderToString({ state: { a: 1 }}, (err, res) => {
+          expect(err).toBeNull()
+          expect(res).toContain(expectedHTMLWithManifest({
+            integrity: true,
+            crossorigin: 'use-credentials'
+          }))
           done()
         })
       })
